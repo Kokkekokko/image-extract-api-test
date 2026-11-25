@@ -1,0 +1,90 @@
+# Copy this file to config.yaml and edit it.
+# ${VAR} values are read from environment variables (or a .env file in the project root).
+
+dataset:
+  images_dir: images                      # folder of images to send
+  ground_truth: data/ground_truth.jsonl   # .jsonl or .csv; set to null to only collect responses
+  # Map the column names in your ground-truth file to the names the harness uses.
+  fields:
+    id: id
+    image: image          # file name inside images_dir
+    question: question    # per-image prompt (optional column)
+    answer: answer        # correct answer
+    task: task            # optional grouping in the report
+    category: category    # optional grouping in the report
+
+prompt:
+  # Sent before each image's question. Leave empty to send only the question.
+  system: >-
+    You are an OCR and document understanding assistant. Answer the request about the image.
+    Reply with the answer only, no explanation.
+  # Used when an image has no question in the ground-truth file.
+  default_question: "Extract all text in this image."
+
+api:
+  # One of: openai_compatible | anthropic | http | echo
+  provider: openai_compatible
+  timeout: 120          # seconds per request
+  max_retries: 3        # retries on 429 / 5xx / timeouts
+  concurrency: 4        # parallel requests
+  max_tokens: 4096
+
+  # --- openai_compatible: Microsoft Foundry, Azure OpenAI v1, OpenAI, vLLM, Ollama ... ---
+  openai_compatible:
+    base_url: ${FOUNDRY_BASE_URL}
+    api_key: ${FOUNDRY_API_KEY}
+    model: gpt-4.1              # your deployment name
+    temperature: 0
+    image_detail: high          # low | high | auto
+
+  # --- anthropic: Claude as a mock / reference model ---
+  anthropic:
+    api_key: ${ANTHROPIC_API_KEY}
+    model: claude-opus-5-5      # claude-haiku-5-5 is a much cheaper mock
+    effort: low                 # low | medium | high  (OCR rarely needs more)
+    foundry_resource: null      # set to your Foundry resource name to call Claude on Foundry
+
+  # --- http: any other REST API ---
+  http:
+    url: https://example.com/v1/extract
+    method: POST
+    headers:
+      Authorization: Bearer ${MY_API_KEY}
+    mode: json                  # json | multipart
+    # json mode: placeholders {image_b64} {mime} {prompt} {filename} are filled in (strings only)
+    body:
+      image: "data:{mime};base64,{image_b64}"
+      prompt: "{prompt}"
+    # multipart mode: the image goes in file_field, form fields get the same placeholders
+    file_field: file
+    form:
+      prompt: "{prompt}"
+    # Where the answer text sits in the JSON response (dots, numbers index lists).
+    response_path: choices.0.message.content
+
+  # --- echo: offline test of the pipeline, no API calls ---
+  echo:
+    mode: answer                # answer (returns the ground truth -> 100%) | empty (-> 0%)
+
+metrics:
+  normalize:
+    lowercase: false
+    strip_punctuation: false
+    remove_whitespace: false    # true compares Thai text without any spaces
+  anls_threshold: 0.5
+  # exact_match | edit_similarity | anls | char_f1 | token_f1 | json_f1
+  default_primary: edit_similarity
+  # Headline metric per task value (matches the "task" field, case-insensitive).
+  # Unlisted tasks use default_primary. json_f1 falls back to edit_similarity when the answer is not JSON.
+  # The task names below are the ones used in ThaiOCRBench.
+  primary_by_task:
+    Document classification: exact_match
+    Infographics: anls
+    Cognition VQA: anls
+    Diagram VQA: anls
+    Key information extraction: json_f1
+    Key information mapping: json_f1
+    Chart parsing: json_f1
+
+report:
+  worst_examples: 10

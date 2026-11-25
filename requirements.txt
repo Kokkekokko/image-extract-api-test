@@ -1,0 +1,10 @@
+requests>=2.31
+pyyaml>=6.0
+rapidfuzz>=3.0
+tqdm>=4.66
+pillow>=10.0
+# dataset preparation (ThaiOCRBench adapter)
+datasets>=2.19
+# provider SDKs (install the ones you use)
+openai>=1.40
+anthropic>=0.70
